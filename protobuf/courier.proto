@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "github.com/david-wiles/groupme-clone/internal";
+
+package internal;
+
+service Courier {
+  rpc SendMessage(MessageRequest) returns (MessageResponse) {}
+}
+
+message MessageRequest {
+  string uuid = 1;
+  bytes payload = 2;
+}
+
+message MessageResponse {
+
+}
