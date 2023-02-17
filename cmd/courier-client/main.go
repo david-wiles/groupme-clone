@@ -23,6 +23,8 @@ func main() {
 
 	client := pkg.NewClient(context.Background(), conn)
 	for msg := range client.Reads {
-		log.Printf(string(msg))
+		if message, ok := msg.(*pkg.ClientMessage); ok {
+			log.Printf("%s", string(message.Payload))
+		}
 	}
 }

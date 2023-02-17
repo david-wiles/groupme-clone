@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"log"
@@ -12,8 +13,8 @@ import (
 type WebsocketConnection struct {
 	// Writes should be used to send a message to the connection. This channel is consumed by
 	// writeWorker, which reads messages from the channel until it is closed
-	Writes chan Serializable
-	Serializer
+	Writes chan pkg.Serializable
+	pkg.Serializer
 
 	// ID is a UUID identifying the websocket
 	ID uuid.UUID
@@ -28,7 +29,7 @@ type WebsocketConnection struct {
 // NewWebsocketConnection will create a new websocket and generate a UUID
 func NewWebsocketConnection(conn *websocket.Conn, hub *Hub) *WebsocketConnection {
 	ws := &WebsocketConnection{
-		Writes:     make(chan Serializable, 64),
+		Writes:     make(chan pkg.Serializable, 64),
 		Serializer: hub.Serializer,
 		ID:         uuid.New(),
 		conn:       conn,
@@ -53,13 +54,13 @@ func (ws *WebsocketConnection) readWorker() {
 
 		// TODO disable this in non-dev environments
 		if t == websocket.TextMessage && string(bytes) == "whoami" {
-			ws.Writes <- WhoAmIResponse{
+			ws.Writes <- pkg.WhoAmIResponse{
 				UUID: ws.ID.String(),
 			}
 			continue
 		}
 
-		msg := &ClientAck{}
+		msg := &pkg.ClientAck{}
 		if err := ws.Deserialize(bytes, msg); err != nil {
 			log.Printf("unable to decode client message uuid=%s err=%v", ws.ID.String(), err)
 		}

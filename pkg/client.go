@@ -2,38 +2,42 @@ package pkg
 
 import (
 	"context"
-	"github.com/david-wiles/groupme-clone/internal"
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
-	Reads chan []byte
-	internal.Serializer
+	Reads chan Serializable
+	Serializer
 
-	conn *websocket.Conn
+	conn   *websocket.Conn
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func NewClient(ctx context.Context, conn *websocket.Conn) *Client {
+	clientContext, cancel := context.WithCancel(ctx)
+
 	client := &Client{
-		Reads:      make(chan []byte),
-		Serializer: internal.JSONSerializer{},
+		Reads:      make(chan Serializable),
+		Serializer: JSONSerializer{},
 		conn:       conn,
+		ctx:        clientContext,
+		cancel:     cancel,
 	}
 
-	// Request for self-ID once socket is opened
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("whoami")); err != nil {
-		panic(err)
-	}
-
-	go client.reader(ctx)
+	go client.reader()
 
 	return client
 }
 
-func (c *Client) reader(ctx context.Context) {
+func (c *Client) Close() {
+	c.cancel()
+}
+
+func (c *Client) reader() {
 	defer c.close()
 
-	messages := make(chan *internal.ClientMessage)
+	messages := make(chan *ClientMessage)
 
 	go func() {
 		for {
@@ -42,7 +46,7 @@ func (c *Client) reader(ctx context.Context) {
 				return
 			}
 
-			decoded := &internal.ClientMessage{}
+			decoded := &ClientMessage{}
 			if err := c.Deserialize(bytes, decoded); err != nil {
 				continue
 			}
@@ -53,11 +57,11 @@ func (c *Client) reader(ctx context.Context) {
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			return
 		case msg := <-messages:
 			// Add message payload to Reads
-			c.Reads <- msg.Payload
+			c.Reads <- msg
 
 			// Send ack
 			if err := c.ackMessage(msg); err != nil {
@@ -67,8 +71,8 @@ func (c *Client) reader(ctx context.Context) {
 	}
 }
 
-func (c *Client) ackMessage(msg *internal.ClientMessage) error {
-	ack := internal.ClientAck{
+func (c *Client) ackMessage(msg *ClientMessage) error {
+	ack := ClientAck{
 		Cid: msg.Cid,
 	}
 
@@ -84,6 +88,7 @@ func (c *Client) ackMessage(msg *internal.ClientMessage) error {
 }
 
 func (c *Client) close() {
+	close(c.Reads)
 	_ = c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	_ = c.conn.Close()
 }

@@ -1,10 +1,30 @@
-package internal
+package pkg
 
 import (
 	"bytes"
 	"encoding/json"
 	"github.com/gorilla/websocket"
 )
+
+type Serializable interface {
+}
+
+type ClientAck struct {
+	Cid          string `json:"cid"`
+	Serializable `json:"serializable,omitempty"`
+}
+
+type ClientMessage struct {
+	Payload      []byte `json:"payload"`
+	Cid          string `json:"cid,omitempty"`
+	Acknowledge  bool   `json:"acknowledge,omitempty"`
+	Serializable `json:"serializable,omitempty"`
+}
+
+type WhoAmIResponse struct {
+	UUID         string `json:"uuid"`
+	Serializable `json:"serializable,omitempty"`
+}
 
 type Serializer interface {
 	Serialize(Serializable) (int, []byte, error)
@@ -29,24 +49,4 @@ func (JSONSerializer) Deserialize(b []byte, s Serializable) error {
 		return err
 	}
 	return nil
-}
-
-type Serializable interface {
-}
-
-type ClientAck struct {
-	Cid          string `json:"cid"`
-	Serializable `json:"serializable,omitempty"`
-}
-
-type ClientMessage struct {
-	Payload      []byte `json:"payload"`
-	Cid          string `json:"cid,omitempty"`
-	Acknowledge  bool   `json:"acknowledge,omitempty"`
-	Serializable `json:"serializable,omitempty"`
-}
-
-type WhoAmIResponse struct {
-	UUID         string `json:"uuid"`
-	Serializable `json:"serializable,omitempty"`
 }

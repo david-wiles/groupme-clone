@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"log"
@@ -22,7 +23,7 @@ type Hub struct {
 	cidMu       sync.RWMutex
 	inFlightCID map[uuid.UUID]chan struct{}
 
-	Serializer
+	pkg.Serializer
 }
 
 func NewHub() *Hub {
@@ -31,7 +32,7 @@ func NewHub() *Hub {
 		conns:       make(map[uuid.UUID]*WebsocketConnection),
 		cidMu:       sync.RWMutex{},
 		inFlightCID: make(map[uuid.UUID]chan struct{}),
-		Serializer:  JSONSerializer{},
+		Serializer:  pkg.JSONSerializer{},
 	}
 }
 
@@ -56,7 +57,7 @@ func (hub *Hub) UnregisterConnection(ID uuid.UUID) {
 
 // UnsafeSendMessage attempts to send the message msg to the connection identified by ID. It will not
 // attempt to verify that the client received the message, to wait for acknowledgement from the client use 'SendMessage'
-func (hub *Hub) UnsafeSendMessage(ID uuid.UUID, msg Serializable) error {
+func (hub *Hub) UnsafeSendMessage(ID uuid.UUID, msg pkg.Serializable) error {
 	log.Printf("sending bytes to client uuid=%s", ID.String())
 
 	hub.connMu.RLock()
@@ -80,7 +81,7 @@ func (hub *Hub) UnsafeSendMessage(ID uuid.UUID, msg Serializable) error {
 func (hub *Hub) SendMessage(ctx context.Context, ID uuid.UUID, msg []byte) error {
 	// Format message using cid to wait for ack from client
 	cid := uuid.New()
-	clientMessage := &ClientMessage{
+	clientMessage := &pkg.ClientMessage{
 		Payload:     msg,
 		Cid:         cid.String(),
 		Acknowledge: true,
@@ -102,7 +103,8 @@ func (hub *Hub) SendMessage(ctx context.Context, ID uuid.UUID, msg []byte) error
 	}()
 
 	// Add timeout for ack
-	context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	timedCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
 	// Send message to client
 	if err := hub.UnsafeSendMessage(ID, clientMessage); err != nil {
@@ -115,10 +117,9 @@ func (hub *Hub) SendMessage(ctx context.Context, ID uuid.UUID, msg []byte) error
 		// Success
 		log.Printf("received ack cid=%s", cid.String())
 		return nil
-	case <-ctx.Done():
-		// Context expired, return error to caller
+	case <-timedCtx.Done():
 		log.Printf("error waiting for client to acknowledge message. cid=%s err=%v", cid.String(), ctx.Err())
-		return ctx.Err()
+		return timedCtx.Err()
 	}
 }
 
