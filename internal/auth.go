@@ -1,9 +1,12 @@
 package internal
 
 import (
+	"context"
+	"errors"
 	"github.com/golang-jwt/jwt"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
+	"net/http"
 )
 
 func HashPassword(pass string) (string, error) {
@@ -45,4 +48,29 @@ func GenerateJWT(account *Account, key interface{}) (string, error) {
 
 func VerifyJWT(auth string, key interface{}) (*jwt.Token, error) {
 	return jwt.Parse(auth, func(token *jwt.Token) (interface{}, error) { return key, nil })
+}
+
+func GetAndVerifyJWT(jwtSecret interface{}, r *http.Request) (*http.Request, error) {
+	header := r.Header.Get("Authorization")
+	var auth string
+
+	// Instead of splitting the string, we will just remove the "Bearer " prefix
+	if len(header) > 7 {
+		auth = header[7:]
+	} else {
+		return nil, errors.New("invalid authorization header")
+	}
+
+	token, err := VerifyJWT(auth, jwtSecret)
+	if err != nil {
+		return nil, errors.New("unable to decode token")
+	}
+
+	if !token.Valid {
+		return nil, errors.New("token is invalid")
+	}
+
+	// Put the parsed token into the request context to pass to the next handler
+	ctx := context.WithValue(r.Context(), "jwt", token)
+	return r.WithContext(ctx), nil
 }

@@ -4,7 +4,7 @@ import (
 	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"log"
+	log "github.com/sirupsen/logrus"
 )
 
 // WebsocketConnection represents an active websocket that is registered with the courier's hub.
@@ -59,11 +59,11 @@ func (ws *WebsocketConnection) readWorker() {
 
 		msg := &pkg.ClientAck{}
 		if err := ws.Deserialize(bytes, msg); err != nil {
-			log.Printf("unable to decode client message uuid=%s err=%v", ws.ID.String(), err)
+			log.WithFields(log.Fields{"id": ws.ID, "err": err}).Warnln("unable to decode client message")
 		}
 
 		if err := ws.hub.Acknowledge(msg.Cid); err != nil {
-			log.Printf("failed to acknowledge message err=%v", err)
+			log.WithFields(log.Fields{"err": err}).Warnln("failed to acknowledge message")
 		}
 	}
 }
@@ -73,19 +73,19 @@ func (ws *WebsocketConnection) writeWorker() {
 	for msg := range ws.Writes {
 		t, b, err := ws.Serialize(msg)
 		if err != nil {
-			log.Printf("unable to serialize message err=%v", err)
+			log.WithFields(log.Fields{"err": err, "id": ws.ID}).Warnln("unable to serialize message er")
 			continue
 		}
 
 		if err := ws.conn.WriteMessage(t, b); err != nil {
-			log.Printf("error writing message conn=%s err=%v\n", ws.ID.String(), err)
+			log.WithFields(log.Fields{"err": err, "id": ws.ID}).Warnln("error writing message")
 		}
 	}
 }
 
 // unregister removes itself from the hub and closes the underlying connection
 func (ws *WebsocketConnection) unregister() {
-	log.Printf("removing websocket uuid=%s", ws.ID.String())
+	log.WithFields(log.Fields{"id": ws.ID}).Infoln("removing websocket")
 
 	// Remove the connection from the hub first to prevent other goroutines from writing to
 	// the websocket while resources are being cleaned up

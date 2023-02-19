@@ -6,7 +6,7 @@ import (
 	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -61,8 +61,6 @@ func (hub *Hub) UnregisterConnection(ID uuid.UUID) {
 // UnsafeSendMessage attempts to send the message msg to the connection identified by ID. It will not
 // attempt to verify that the client received the message, to wait for acknowledgement from the client use 'SendMessage'
 func (hub *Hub) UnsafeSendMessage(ID uuid.UUID, msg pkg.Serializable) error {
-	log.Printf("sending bytes to client uuid=%s", ID.String())
-
 	hub.connMu.RLock()
 	defer hub.connMu.RUnlock()
 
@@ -118,10 +116,11 @@ func (hub *Hub) SendMessage(ctx context.Context, ID uuid.UUID, msg []byte) error
 	select {
 	case <-ack:
 		// Success
-		log.Printf("received ack cid=%s", cid.String())
+		log.WithFields(log.Fields{"cid": cid, "id": ID}).Infoln("received ack")
 		return nil
 	case <-timedCtx.Done():
-		log.Printf("error waiting for client to acknowledge message. cid=%s err=%v", cid.String(), ctx.Err())
+		log.WithFields(log.Fields{"cid": cid, "err": ctx.Err()}).
+			Warnln("error waiting for client to acknowledge message")
 		return timedCtx.Err()
 	}
 }

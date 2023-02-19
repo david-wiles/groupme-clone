@@ -30,10 +30,7 @@ func init() {
 	})
 
 	// Initiate postgres connection
-	connection, ok := os.LookupEnv("POSTGRES_URI")
-	if !ok {
-		panic("no environment variable found for POSTGRES_URI")
-	}
+	connection := internal.MustGetEnv("POSTGRES_URI")
 
 	var err error
 	db, err = sql.Open("postgres", connection)
@@ -50,22 +47,15 @@ func init() {
 	messageQueryEngine = internal.MessageQueryEngine{db}
 
 	// Set JWT secret
-	secret, ok := os.LookupEnv("JWT_SECRET")
-	if !ok {
-		panic("no environment variable found for JWT_SECRET")
-	}
+	secret := internal.MustGetEnv("JWT_SECRET")
 
 	jwtSecret = []byte(secret)
 
 	// Initiate Redis connection
-	redisAddr, ok := os.LookupEnv("REDIS_ADDR")
-	if !ok {
-		panic("no environment variable found for REDIS_ADDR")
-	}
+	redisAddr := internal.MustGetEnv("REDIS_ADDR")
 
 	rdb = redis.NewClient(&redis.Options{
 		Addr: redisAddr,
-		DB:   0,
 	})
 }
 

@@ -83,8 +83,6 @@ func UnicastMessage(ctx context.Context, userID uuid.UUID, message string) error
 
 	ok, err := sendMessageTo(ctx, client, message)
 	if err != nil {
-		log.WithFields(log.Fields{"err": err, "client": client}).Warnln("cannot send direct message to client")
-
 		if !ok {
 			_ = rdb.Del(ctx, userID.String())
 		}

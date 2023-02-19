@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"github.com/david-wiles/groupme-clone/internal"
 	"github.com/golang-jwt/jwt"
 	"github.com/julienschmidt/httprouter"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -13,34 +11,12 @@ import (
 // This will return 403 without calling `next` if the JWT is invalid.
 func JWTGuard(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		header := r.Header.Get("Authorization")
-		var auth string
-
-		// Instead of splitting the string, we will just remove the "Bearer " prefix
-		if len(header) > 7 {
-			auth = header[7:]
-		} else {
-			w.WriteHeader(400)
-			return
-		}
-
-		token, err := internal.VerifyJWT(auth, jwtSecret)
+		req, err := internal.GetAndVerifyJWT(jwtSecret, r)
 		if err != nil {
-			w.WriteHeader(500)
-			log.
-				WithFields(log.Fields{"err": err}).
-				Warnln("unable to decode jwt")
-			return
-		}
-
-		if !token.Valid {
 			w.WriteHeader(403)
 			return
 		}
 
-		// Put the parsed token into the request context and pass to the next handler
-		ctx := context.WithValue(r.Context(), "jwt", token)
-		req := r.WithContext(ctx)
 		next(w, req, p)
 	}
 }

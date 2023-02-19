@@ -73,7 +73,9 @@ func main() {
 		panic(err)
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(*wsURL, nil)
+	headers := http.Header{}
+	headers.Add("Authorization", "Bearer "+token)
+	conn, _, err := websocket.DefaultDialer.Dial(*wsURL, headers)
 	if err != nil {
 		panic(err)
 	}
