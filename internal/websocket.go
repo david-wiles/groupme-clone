@@ -36,6 +36,11 @@ func NewWebsocketConnection(conn *websocket.Conn, hub *Hub) *WebsocketConnection
 		hub:        hub,
 	}
 
+	// Send the client their webhook as soon as the connection has been established
+	ws.Writes <- pkg.WhoAmIResponse{
+		Webhook: hub.hostname + "/" + ws.ID.String(),
+	}
+
 	go ws.readWorker()
 	go ws.writeWorker()
 
@@ -45,19 +50,11 @@ func NewWebsocketConnection(conn *websocket.Conn, hub *Hub) *WebsocketConnection
 // readWorker continually reads messages from the websocket until closed
 func (ws *WebsocketConnection) readWorker() {
 	for {
-		t, bytes, err := ws.conn.ReadMessage()
+		_, bytes, err := ws.conn.ReadMessage()
 		if err != nil {
 			// Close this connection, mark as closed and close channel
 			ws.unregister()
 			return
-		}
-
-		// TODO disable this in non-dev environments
-		if t == websocket.TextMessage && string(bytes) == "whoami" {
-			ws.Writes <- pkg.WhoAmIResponse{
-				UUID: ws.ID.String(),
-			}
-			continue
 		}
 
 		msg := &pkg.ClientAck{}

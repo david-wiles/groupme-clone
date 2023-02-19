@@ -16,7 +16,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	hub := internal.NewHub()
+	hub := internal.NewHub("localhost:8081")
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)

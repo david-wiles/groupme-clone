@@ -6,7 +6,8 @@ import (
 )
 
 type Client struct {
-	Reads chan Serializable
+	Reads   chan Serializable
+	Webhook string
 	Serializer
 
 	conn   *websocket.Conn
@@ -14,11 +15,26 @@ type Client struct {
 	cancel context.CancelFunc
 }
 
-func NewClient(ctx context.Context, conn *websocket.Conn) *Client {
+func NewClient(ctx context.Context, conn *websocket.Conn) (*Client, error) {
+	serializer := JSONSerializer{}
+
+	_, bytes, err := conn.ReadMessage()
+	if err != nil {
+		_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		_ = conn.Close()
+		return nil, err
+	}
+
+	whoami := WhoAmIResponse{}
+	if err := serializer.Deserialize(bytes, &whoami); err != nil {
+		return nil, err
+	}
+
 	clientContext, cancel := context.WithCancel(ctx)
 
 	client := &Client{
 		Reads:      make(chan Serializable),
+		Webhook:    whoami.Webhook,
 		Serializer: JSONSerializer{},
 		conn:       conn,
 		ctx:        clientContext,
@@ -27,7 +43,7 @@ func NewClient(ctx context.Context, conn *websocket.Conn) *Client {
 
 	go client.reader()
 
-	return client
+	return client, nil
 }
 
 func (c *Client) Close() {

@@ -1,6 +1,6 @@
 # REST
 
-The REST api, located in (separate repo?), provides the entrypoint for any new messages from clients. When a client
+The REST api, located in cmd/courier-rest, provides the entrypoint for any actions from clients. When a client
 wishes to post a new message, create a room, update their profile, or do other activities which originate from the 
 client, the request will be done as an HTTPS request to this service. 
 
@@ -13,3 +13,5 @@ courier service. This service will do a series of tasks to persist the data and 
 2. Persist the message bytes in RDMS
 3. Query the clients currently subscribed to a room
 4. Send messages to courier service for each client
+
+## 

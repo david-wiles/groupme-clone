@@ -22,7 +22,7 @@ type ClientMessage struct {
 }
 
 type WhoAmIResponse struct {
-	UUID         string `json:"uuid"`
+	Webhook      string `json:"webhook"`
 	Serializable `json:"serializable,omitempty"`
 }
 

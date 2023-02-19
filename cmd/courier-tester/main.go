@@ -23,26 +23,12 @@ func CreateWebsocketClient(ctx context.Context, URL string) (*pkg.Client, string
 		return nil, "", err
 	}
 
-	// Get this connection's UUID
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("whoami")); err != nil {
-		return nil, "", err
-	}
-
-	_, bytes, err := conn.ReadMessage()
+	client, err := pkg.NewClient(ctx, conn)
 	if err != nil {
-		_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		_ = conn.Close()
 		return nil, "", err
 	}
 
-	client := pkg.NewClient(ctx, conn)
-
-	whoami := pkg.WhoAmIResponse{}
-	if err := client.Deserialize(bytes, &whoami); err != nil {
-		client.Close()
-	}
-
-	return client, whoami.UUID, nil
+	return client, client.Webhook, nil
 }
 
 func CreateGRPCClient(URL string) (internal.CourierClient, error) {

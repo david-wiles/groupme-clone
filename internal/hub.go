@@ -23,15 +23,18 @@ type Hub struct {
 	cidMu       sync.RWMutex
 	inFlightCID map[uuid.UUID]chan struct{}
 
+	hostname string
+
 	pkg.Serializer
 }
 
-func NewHub() *Hub {
+func NewHub(hostname string) *Hub {
 	return &Hub{
 		connMu:      sync.RWMutex{},
 		conns:       make(map[uuid.UUID]*WebsocketConnection),
 		cidMu:       sync.RWMutex{},
 		inFlightCID: make(map[uuid.UUID]chan struct{}),
+		hostname:    hostname,
 		Serializer:  pkg.JSONSerializer{},
 	}
 }
