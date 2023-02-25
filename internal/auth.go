@@ -46,7 +46,7 @@ func GenerateJWT(account *Account, key interface{}) (string, error) {
 	return token.SignedString(key)
 }
 
-func VerifyJWT(auth string, key interface{}) (*jwt.Token, error) {
+func ParseJWT(auth string, key interface{}) (*jwt.Token, error) {
 	return jwt.Parse(auth, func(token *jwt.Token) (interface{}, error) { return key, nil })
 }
 
@@ -63,6 +63,17 @@ func GetAndVerifyJWT(jwtSecret interface{}, r *http.Request) (*http.Request, err
 
 	token, err := VerifyJWT(auth, jwtSecret)
 	if err != nil {
+		return nil, err
+	}
+
+	// Put the parsed token into the request context to pass to the next handler
+	ctx := context.WithValue(r.Context(), "jwt", token)
+	return r.WithContext(ctx), nil
+}
+
+func VerifyJWT(auth string, key interface{}) (*jwt.Token, error) {
+	token, err := ParseJWT(auth, key)
+	if err != nil {
 		return nil, errors.New("unable to decode token")
 	}
 
@@ -70,7 +81,5 @@ func GetAndVerifyJWT(jwtSecret interface{}, r *http.Request) (*http.Request, err
 		return nil, errors.New("token is invalid")
 	}
 
-	// Put the parsed token into the request context to pass to the next handler
-	ctx := context.WithValue(r.Context(), "jwt", token)
-	return r.WithContext(ctx), nil
+	return token, nil
 }

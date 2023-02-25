@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"github.com/david-wiles/groupme-clone/internal"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
@@ -67,14 +69,15 @@ func main() {
 	internal.RegisterCourierServer(grpcServer, &internal.CourierServerImpl{Hub: hub})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := internal.GetAndVerifyJWT(jwtSecret, r); err != nil {
-			w.WriteHeader(403)
-			return
-		}
-
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.WithFields(log.Fields{"err": err}).Warnln("upgrade error")
+			return
+		}
+
+		// Require JWT within 30 seconds of opening websocket
+		if err := awaitJWT(r.Context(), conn, 30*time.Second); err != nil {
+			w.WriteHeader(403)
 			return
 		}
 
@@ -88,4 +91,32 @@ func main() {
 	}
 
 	grpcServer.GracefulStop()
+}
+
+func awaitJWT(ctx context.Context, conn *websocket.Conn, timeout time.Duration) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	authorized := make(chan bool)
+
+	defer cancel()
+
+	go func() {
+		if _, bytes, err := conn.ReadMessage(); err == nil {
+			if _, err := internal.VerifyJWT(string(bytes), jwtSecret); err == nil {
+				authorized <- true
+			}
+		}
+		authorized <- false
+		close(authorized)
+	}()
+
+	select {
+	case <-ctxWithTimeout.Done():
+		return ctxWithTimeout.Err()
+	case isAuthorized := <-authorized:
+		if isAuthorized {
+			return nil
+		} else {
+			return errors.New("unable to authorize websocket")
+		}
+	}
 }

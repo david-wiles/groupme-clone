@@ -43,3 +43,13 @@ type CreateRoomRequest struct {
 	// Recipient is only used for requests to create a direct message room
 	Recipient string `json:"recipient,omitempty"`
 }
+
+type MessageGetResponse struct {
+	Messages []MessageGetResponseMessage `json:"messages"`
+}
+
+type MessageGetResponseMessage struct {
+	UserID    string `json:"userId"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}

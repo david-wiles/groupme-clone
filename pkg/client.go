@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"github.com/gorilla/websocket"
+	"net/http"
 )
 
 type Client struct {
@@ -15,8 +16,18 @@ type Client struct {
 	cancel context.CancelFunc
 }
 
-func NewClient(ctx context.Context, conn *websocket.Conn) (*Client, error) {
+func NewClient(ctx context.Context, url string, token string) (*Client, error) {
 	serializer := JSONSerializer{}
+
+	headers := http.Header{}
+	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(token)); err != nil {
+		return nil, err
+	}
 
 	_, bytes, err := conn.ReadMessage()
 	if err != nil {

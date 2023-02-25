@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type GRPCConns struct {
@@ -160,6 +161,55 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	}
 }
 
+func HandleMessageGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Get required query parameters from and to
+	fromRaw := r.URL.Query().Get("from")
+	toRaw := r.URL.Query().Get("to")
+	roomRaw := r.URL.Query().Get("room")
+
+	if fromRaw == "" {
+		w.WriteHeader(400)
+		return
+	}
+
+	if roomRaw == "" {
+		w.WriteHeader(400)
+		return
+	}
+
+	from, err := time.Parse(time.RFC3339, fromRaw)
+	if err != nil {
+		w.WriteHeader(400)
+		return
+	}
+
+	to, err := time.Parse(time.RFC3339, toRaw)
+	if err != nil {
+		to = time.Now()
+	}
+
+	room, err := uuid.Parse(roomRaw)
+	if err != nil {
+		w.WriteHeader(400)
+		return
+	}
+
+	messages, err := messageQueryEngine.QueryMessages(room, from, to)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	resp := internal.Messages(messages).ToResponse()
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(resp); err != nil {
+		log.WithFields(log.Fields{"err": err}).Errorln("unable to serialize response")
+		w.WriteHeader(500)
+		return
+	}
+}
+
 func AddMessageRoutes(router *httprouter.Router) {
 	router.POST("/message", JWTGuard(HandleMessagePost))
+	router.GET("/message", JWTGuard(HandleMessageGet))
 }

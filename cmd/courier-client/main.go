@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/david-wiles/groupme-clone/pkg"
-	"github.com/gorilla/websocket"
 	"io"
 	"log"
 	"net/http"
@@ -73,14 +72,7 @@ func main() {
 		panic(err)
 	}
 
-	headers := http.Header{}
-	headers.Add("Authorization", "Bearer "+token)
-	conn, _, err := websocket.DefaultDialer.Dial(*wsURL, headers)
-	if err != nil {
-		panic(err)
-	}
-
-	client, err := pkg.NewClient(context.Background(), conn)
+	client, err := pkg.NewClient(context.Background(), *wsURL, token)
 	if err != nil {
 		panic(err)
 	}
