@@ -8,7 +8,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	JWT string `json:"jwt"`
+	Token string `json:"token"`
+	ID    string `json:"id"`
 }
 
 type CreateAccountRequest struct {
@@ -29,11 +30,11 @@ type MessagePostRequest struct {
 }
 
 type ClientRegisterRequest struct {
-	ClientURL string
+	ClientURL string `json:"clientUrl"`
 }
 
 type ClientUnRegisterRequest struct {
-	ClientURL string
+	ClientURL string `json:"clientUrl"`
 }
 
 type CreateRoomRequest struct {
@@ -42,6 +43,16 @@ type CreateRoomRequest struct {
 
 	// Recipient is only used for requests to create a direct message room
 	Recipient string `json:"recipient,omitempty"`
+}
+
+type ListRoomsResponse struct {
+	Rooms []RoomResponse `json:"rooms"`
+}
+
+type RoomResponse struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Members []string `json:"members"`
 }
 
 type MessageGetResponse struct {

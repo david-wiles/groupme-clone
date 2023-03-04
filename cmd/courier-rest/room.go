@@ -129,9 +129,37 @@ func HandleJoinRoom(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 	}
 }
 
+func HandleListRooms(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	claims, ok := GetClaimsFromRequest(r)
+	if !ok {
+		log.WithFields(log.Fields{}).Errorln("unable to read claims from request")
+		w.WriteHeader(500)
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(claims.ID)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	rooms, err := roomQueryEngine.GetJoinedRooms(parsedUserID)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	resp := internal.Rooms(rooms).ToResponse()
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(resp); err != nil {
+		w.WriteHeader(500)
+	}
+}
+
 func AddRoomRoutes(router *httprouter.Router) {
-	router.POST("/room/", JWTGuard(HandleCreateRoom))
+	router.POST("/room", JWTGuard(HandleCreateRoom))
 	//router.PATCH("/room/:id", HandleUpdateRoom)
 	router.GET("/room/:id", JWTGuard(HandleGetRoom))
 	router.POST("/room/:id/join", JWTGuard(HandleJoinRoom))
+	router.GET("/room", JWTGuard(HandleListRooms))
 }

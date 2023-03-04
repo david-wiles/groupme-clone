@@ -44,7 +44,7 @@ func getJWTFromResponse(body io.ReadCloser) (string, error) {
 		return "", err
 	}
 
-	return resp.JWT, nil
+	return resp.Token, nil
 }
 
 // Creates a virtual device which will act as a chat client

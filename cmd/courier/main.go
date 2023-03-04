@@ -45,6 +45,10 @@ func main() {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
+		// Do not commit, just testing
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
 
 	mux := http.NewServeMux()

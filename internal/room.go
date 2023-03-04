@@ -3,6 +3,7 @@ package internal
 import (
 	"database/sql"
 	"errors"
+	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -12,6 +13,20 @@ type Room struct {
 	ID      uuid.UUID `json:"id,omitempty"`
 	Name    string    `json:"name,omitempty"`
 	Members []string  `json:"members,omitempty"`
+}
+
+type Rooms []Room
+
+func (rooms Rooms) ToResponse() *pkg.ListRoomsResponse {
+	resp := &pkg.ListRoomsResponse{}
+	for _, room := range rooms {
+		resp.Rooms = append(resp.Rooms, pkg.RoomResponse{
+			ID:      room.ID.String(),
+			Name:    room.Name,
+			Members: room.Members,
+		})
+	}
+	return resp
 }
 
 type RoomQueryEngine struct {
@@ -188,7 +203,7 @@ func (db RoomQueryEngine) AddAdmin(roomID, userID uuid.UUID) error {
 	return nil
 }
 
-func (db RoomQueryEngine) AllJoinedRooms(userID uuid.UUID) ([]uuid.UUID, error) {
+func (db RoomQueryEngine) ListJoinedRooms(userID uuid.UUID) ([]uuid.UUID, error) {
 	stmt := `SELECT "room_id" FROM "joined_rooms" WHERE "account_id" = $1;`
 	rows, err := db.Query(stmt, userID)
 	if err != nil {
@@ -211,4 +226,28 @@ func (db RoomQueryEngine) AllJoinedRooms(userID uuid.UUID) ([]uuid.UUID, error) 
 	}
 
 	return roomIDs, nil
+}
+
+func (db RoomQueryEngine) GetJoinedRooms(userID uuid.UUID) ([]Room, error) {
+	stmt := `SELECT id, name, members FROM "rooms" LEFT JOIN joined_rooms jr on rooms.id = jr.room_id WHERE jr.account_id = $1;`
+	rows, err := db.Query(stmt, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return []Room{}, nil
+		}
+	}
+
+	rooms := []Room{}
+
+	for rows.Next() {
+		room := Room{}
+		members := pq.StringArray{}
+		if err := rows.Scan(&room.ID, &room.Name, &members); err != nil {
+			log.WithFields(log.Fields{"err": err}).Warnln("unable to scan row")
+		}
+		room.Members = members
+		rooms = append(rooms, room)
+	}
+
+	return rooms, nil
 }

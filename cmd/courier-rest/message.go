@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/david-wiles/groupme-clone/internal"
@@ -38,7 +39,7 @@ func (conns *GRPCConns) GetOrCreate(host string) (internal.CourierClient, error)
 
 var cachedGRPCConns = &GRPCConns{make(map[string]internal.CourierClient)}
 
-func sendMessageTo(ctx context.Context, webhook, message string) (bool, error) {
+func sendMessageTo(ctx context.Context, webhook string, message []byte) (bool, error) {
 	splitWebhook := strings.Split(webhook, "/")
 	if len(splitWebhook) != 2 {
 		return false, nil
@@ -47,7 +48,7 @@ func sendMessageTo(ctx context.Context, webhook, message string) (bool, error) {
 	if conn, err := cachedGRPCConns.GetOrCreate(splitWebhook[0]); err == nil {
 		if _, err := conn.SendMessage(ctx, &internal.MessageRequest{
 			Uuid:    splitWebhook[1],
-			Payload: []byte(message),
+			Payload: message,
 		}); err != nil {
 			log.
 				WithFields(log.Fields{"err": err, "host": splitWebhook[0], "connection": splitWebhook[1]}).
@@ -58,7 +59,7 @@ func sendMessageTo(ctx context.Context, webhook, message string) (bool, error) {
 	return true, nil
 }
 
-func BroadcastMessage(ctx context.Context, roomID uuid.UUID, message string) error {
+func BroadcastMessage(ctx context.Context, roomID uuid.UUID, message []byte) error {
 	clients, err := rdb.SMembers(ctx, roomID.String()).Result()
 	if err != nil {
 		return err
@@ -75,7 +76,7 @@ func BroadcastMessage(ctx context.Context, roomID uuid.UUID, message string) err
 	return nil
 }
 
-func UnicastMessage(ctx context.Context, userID uuid.UUID, message string) error {
+func UnicastMessage(ctx context.Context, userID uuid.UUID, message []byte) error {
 	client, err := rdb.Get(ctx, userID.String()).Result()
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "client": client}).Errorln("unable to get client webhook")
@@ -91,6 +92,16 @@ func UnicastMessage(ctx context.Context, userID uuid.UUID, message string) error
 		return err
 	}
 	return nil
+}
+
+func EncodeMessage(payload *pkg.MessagePayload) ([]byte, error) {
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(payload); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -133,7 +144,21 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 		return
 	}
 
-	if err := messageQueryEngine.CreateNewMessage(roomID, userID, req.Message); err != nil {
+	now := time.Now()
+	if err := messageQueryEngine.CreateNewMessage(roomID, userID, now, req.Message); err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	// Create possibly encrypted message payload
+	payload := &pkg.MessagePayload{
+		RoomID:    roomID.String(),
+		UserID:    userID.String(),
+		Timestamp: now.Format(time.RFC3339Nano),
+		Content:   req.Message,
+	}
+	b, err := EncodeMessage(payload)
+	if err != nil {
 		w.WriteHeader(500)
 		return
 	}
@@ -145,20 +170,25 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 				recipientID, err := uuid.Parse(recipient)
 				if err != nil {
 					w.WriteHeader(201)
+					_, _ = w.Write(b)
 					return
 				}
-				if err := UnicastMessage(r.Context(), recipientID, req.Message); err != nil {
+				if err := UnicastMessage(r.Context(), recipientID, b); err != nil {
 					w.WriteHeader(201)
+					_, _ = w.Write(b)
 					return
 				}
 			}
 		}
 	} else {
-		if err := BroadcastMessage(r.Context(), roomID, req.Message); err != nil {
+		if err := BroadcastMessage(r.Context(), roomID, b); err != nil {
 			w.WriteHeader(201)
+			_, _ = w.Write(b)
 			return
 		}
 	}
+
+	_, _ = w.Write(b)
 }
 
 func HandleMessageGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -177,13 +207,13 @@ func HandleMessageGet(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		return
 	}
 
-	from, err := time.Parse(time.RFC3339, fromRaw)
+	from, err := time.Parse(time.RFC3339Nano, fromRaw)
 	if err != nil {
 		w.WriteHeader(400)
 		return
 	}
 
-	to, err := time.Parse(time.RFC3339, toRaw)
+	to, err := time.Parse(time.RFC3339Nano, toRaw)
 	if err != nil {
 		to = time.Now()
 	}

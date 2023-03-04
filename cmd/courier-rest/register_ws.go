@@ -58,7 +58,7 @@ func HandleSelfRegister(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	}
 
 	// Find rooms that the user has joined
-	roomIDs, err := roomQueryEngine.AllJoinedRooms(parsedUserID)
+	roomIDs, err := roomQueryEngine.ListJoinedRooms(parsedUserID)
 	if err != nil && err != internal.NoMatchingRoomError {
 		w.WriteHeader(500)
 		return
@@ -105,7 +105,7 @@ func HandleSelfUnregister(w http.ResponseWriter, r *http.Request, _ httprouter.P
 	}
 
 	// Find rooms the user is a member of
-	roomIDs, err := roomQueryEngine.AllJoinedRooms(parsedUserID)
+	roomIDs, err := roomQueryEngine.ListJoinedRooms(parsedUserID)
 	if err != nil && err != internal.NoMatchingRoomError {
 		w.WriteHeader(500)
 		return

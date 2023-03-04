@@ -45,7 +45,7 @@ func HandleCreateAccount(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 		return
 	}
 
-	resp := &pkg.LoginResponse{token}
+	resp := &pkg.LoginResponse{token, account.ID.String()}
 
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(resp); err != nil {
@@ -99,7 +99,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		return
 	}
 
-	resp := &pkg.LoginResponse{token}
+	resp := &pkg.LoginResponse{token, account.ID.String()}
 
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(resp); err != nil {
@@ -133,7 +133,7 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 }
 
 func AddAccountRoutes(router *httprouter.Router) {
-	router.POST("/account/", HandleCreateAccount)
+	router.POST("/account", HandleCreateAccount)
 	router.POST("/account/login", HandleLogin)
 	//router.GET("/account/", HandleGetSelf)
 	//router.PATCH("/account/me", HandleAccountUpdate)

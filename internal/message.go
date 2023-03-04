@@ -23,7 +23,7 @@ func (messages Messages) ToResponse() *pkg.MessageGetResponse {
 		resp.Messages = append(resp.Messages, pkg.MessageGetResponseMessage{
 			UserID:    message.userID.String(),
 			Content:   message.content,
-			Timestamp: message.timestamp.Format(time.RFC3339),
+			Timestamp: message.timestamp.Format(time.RFC3339Nano),
 		})
 	}
 	return resp
@@ -33,10 +33,10 @@ type MessageQueryEngine struct {
 	*sql.DB
 }
 
-func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, message string) error {
+func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, ts time.Time, message string) error {
 	id := uuid.New()
-	stmt := `INSERT INTO "messages" ("id", "room", "content", "account_id") VALUES ($1, $2, $3, $4);`
-	if _, err := db.Exec(stmt, id, roomID, message, userID); err != nil {
+	stmt := `INSERT INTO "messages" ("id", "room", "content", "ts", "account_id") VALUES ($1, $2, $3, $4, $5);`
+	if _, err := db.Exec(stmt, id, roomID, message, ts, userID); err != nil {
 		log.
 			WithFields(log.Fields{"err": err}).
 			Errorln("unable to insert message into database")

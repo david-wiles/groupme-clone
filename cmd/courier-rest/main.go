@@ -82,6 +82,10 @@ func main() {
 	if err := http.ListenAndServe(":9000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		loggedWriter := &LoggedResponseWriter{200, w}
 
+		// Do not commit.. just for testing
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 		start := time.Now().Nanosecond()
 		router.ServeHTTP(loggedWriter, r)
 		end := time.Now().Nanosecond()
@@ -92,6 +96,7 @@ func main() {
 				"user-agent":     r.Header.Get("User-Agent"),
 				"path":           r.URL.Path,
 				"host":           r.Header.Get("Host"),
+				"method":         r.Method,
 				"responseTimeMs": (end - start) / 1000000.0,
 			}).Infoln()
 	})); err != nil {
