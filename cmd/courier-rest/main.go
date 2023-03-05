@@ -87,7 +87,12 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		start := time.Now().Nanosecond()
-		router.ServeHTTP(loggedWriter, r)
+
+		// Also just for testing
+		if r.Method != http.MethodOptions {
+			router.ServeHTTP(loggedWriter, r)
+		}
+
 		end := time.Now().Nanosecond()
 
 		log.

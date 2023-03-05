@@ -18,7 +18,9 @@ type Message struct {
 type Messages []Message
 
 func (messages Messages) ToResponse() *pkg.MessageGetResponse {
-	resp := &pkg.MessageGetResponse{}
+	resp := &pkg.MessageGetResponse{
+		Messages: []pkg.MessageGetResponseMessage{},
+	}
 	for _, message := range messages {
 		resp.Messages = append(resp.Messages, pkg.MessageGetResponseMessage{
 			UserID:    message.userID.String(),

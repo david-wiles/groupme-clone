@@ -18,7 +18,9 @@ type Room struct {
 type Rooms []Room
 
 func (rooms Rooms) ToResponse() *pkg.ListRoomsResponse {
-	resp := &pkg.ListRoomsResponse{}
+	resp := &pkg.ListRoomsResponse{
+		Rooms: []pkg.RoomResponse{},
+	}
 	for _, room := range rooms {
 		resp.Rooms = append(resp.Rooms, pkg.RoomResponse{
 			ID:      room.ID.String(),
@@ -166,8 +168,8 @@ func (db RoomQueryEngine) JoinRoom(roomID, userID uuid.UUID) error {
 		return err
 	}
 
-	stmt := `INSERT INTO "joined_rooms" ("account_id", "room_id") VALUES ($1, $2);`
-	if _, err := db.Exec(stmt, userID, roomID, true); err != nil {
+	stmt := `INSERT INTO "joined_rooms" ("account_id", "room_id", "is_admin") VALUES ($1, $2, false);`
+	if _, err := db.Exec(stmt, userID, roomID); err != nil {
 		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
 		if err := tx.Rollback(); err != nil {
 			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
@@ -176,7 +178,7 @@ func (db RoomQueryEngine) JoinRoom(roomID, userID uuid.UUID) error {
 	}
 
 	stmt = `UPDATE "rooms" SET "members" = array_append("members", $1) WHERE "id" = $2;`
-	if _, err := db.Exec(stmt, userID, roomID, true); err != nil {
+	if _, err := db.Exec(stmt, userID, roomID); err != nil {
 		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
 		if err := tx.Rollback(); err != nil {
 			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
