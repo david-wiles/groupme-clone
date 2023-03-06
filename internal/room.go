@@ -3,7 +3,6 @@ package internal
 import (
 	"database/sql"
 	"errors"
-	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -13,22 +12,6 @@ type Room struct {
 	ID      uuid.UUID `json:"id,omitempty"`
 	Name    string    `json:"name,omitempty"`
 	Members []string  `json:"members,omitempty"`
-}
-
-type Rooms []Room
-
-func (rooms Rooms) ToResponse() *pkg.ListRoomsResponse {
-	resp := &pkg.ListRoomsResponse{
-		Rooms: []pkg.RoomResponse{},
-	}
-	for _, room := range rooms {
-		resp.Rooms = append(resp.Rooms, pkg.RoomResponse{
-			ID:      room.ID.String(),
-			Name:    room.Name,
-			Members: room.Members,
-		})
-	}
-	return resp
 }
 
 type RoomQueryEngine struct {
@@ -49,24 +32,36 @@ func (db RoomQueryEngine) CreateRoom(name string, userID uuid.UUID) (*Room, erro
 
 	stmt := `INSERT INTO "rooms" ("id", "name", "members") VALUES ($1, $2, $3);`
 	if _, err := db.Exec(stmt, roomID, name, pq.StringArray{userID.String()}); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable create room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return nil, err
 	}
 
 	stmt = `INSERT INTO "joined_rooms" ("account_id", "room_id", "is_admin") VALUES ($1, $2, true);`
 	if _, err := db.Exec(stmt, userID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"roomID": roomID,
+			"userID": userID,
+		}).Errorln("unable to join room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to commit transaction")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable to commit transaction")
 		return nil, err
 	}
 
@@ -87,33 +82,53 @@ func (db RoomQueryEngine) CreateDirectMessageRoom(name string, creatorID, recipi
 
 	stmt := `INSERT INTO "rooms" ("id", "name", "members") VALUES ($1, $2, $3);`
 	if _, err := db.Exec(stmt, roomID, name, pq.StringArray{creatorID.String(), recipientID.String()}); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":         err,
+			"creatorID":   creatorID,
+			"recipientID": recipientID,
+		}).Errorln("unable to create DM room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return nil, err
 	}
 
 	stmt = `INSERT INTO "joined_rooms" ("account_id", "room_id", "is_admin") VALUES ($1, $2, true);`
 	if _, err := db.Exec(stmt, creatorID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"roomID": roomID,
+			"userID": creatorID,
+		}).Errorln("unable to join room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return nil, err
 	}
 
 	stmt = `INSERT INTO "joined_rooms" ("account_id", "room_id", "is_admin") VALUES ($1, $2, true);`
 	if _, err := db.Exec(stmt, recipientID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"roomID": roomID,
+			"userID": recipientID,
+		}).Errorln("unable to join room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to commit transaction")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable to commit transaction")
 		return nil, err
 	}
 
@@ -135,9 +150,10 @@ func (db RoomQueryEngine) GetRoomByID(id uuid.UUID) (*Room, error) {
 
 		if err := row.Scan(&id, &name, &members); err != nil {
 			if err != sql.ErrNoRows {
-				log.
-					WithFields(log.Fields{"err": err}).
-					Errorln("unable to scan account row")
+				log.WithFields(log.Fields{
+					"err":    err,
+					"roomID": id,
+				}).Errorln("unable to scan room row")
 				return nil, err
 			} else {
 				return nil, NoMatchingRoomError
@@ -146,9 +162,9 @@ func (db RoomQueryEngine) GetRoomByID(id uuid.UUID) (*Room, error) {
 
 		parsedID, err := uuid.Parse(id)
 		if err != nil {
-			log.
-				WithFields(log.Fields{"err": err}).
-				Errorln("unable to parse uuid")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to parse uuid")
 			return nil, err
 		}
 
@@ -170,24 +186,38 @@ func (db RoomQueryEngine) JoinRoom(roomID, userID uuid.UUID) error {
 
 	stmt := `INSERT INTO "joined_rooms" ("account_id", "room_id", "is_admin") VALUES ($1, $2, false);`
 	if _, err := db.Exec(stmt, userID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"roomID": roomID,
+			"userID": userID,
+		}).Errorln("unable to join room")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return err
 	}
 
 	stmt = `UPDATE "rooms" SET "members" = array_append("members", $1) WHERE "id" = $2;`
 	if _, err := db.Exec(stmt, userID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to execute query")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"userID": userID,
+			"roomID": roomID,
+		}).Errorln("unable to append room member")
 		if err := tx.Rollback(); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to rollback transaction")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to rollback transaction")
 		}
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to commit transaction")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable to commit transaction")
 		return err
 	}
 
@@ -198,7 +228,11 @@ func (db RoomQueryEngine) AddAdmin(roomID, userID uuid.UUID) error {
 	// Create joined_rooms entry for this user/room combination
 	stmt := `UPDATE "joined_rooms" SET "is_admin" = TRUE WHERE "account_id" = $1 and "room_id" = $2;`
 	if _, err := db.Exec(stmt, userID, roomID); err != nil {
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to create admin")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"userID": userID,
+			"roomID": roomID,
+		}).Errorln("unable to create admin")
 		return err
 	}
 
@@ -212,7 +246,10 @@ func (db RoomQueryEngine) ListJoinedRooms(userID uuid.UUID) ([]uuid.UUID, error)
 		if err == sql.ErrNoRows {
 			return nil, NoMatchingRoomError
 		}
-		log.WithFields(log.Fields{"err": err}).Errorln("unable to query joined rooms")
+		log.WithFields(log.Fields{
+			"err":    err,
+			"userID": userID,
+		}).Errorln("unable to query joined rooms")
 		return nil, err
 	}
 
@@ -221,7 +258,9 @@ func (db RoomQueryEngine) ListJoinedRooms(userID uuid.UUID) ([]uuid.UUID, error)
 
 	for rows.Next() {
 		if err := rows.Scan(&roomID); err != nil {
-			log.WithFields(log.Fields{"err": err}).Errorln("unable to scan row")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorln("unable to scan row")
 			return nil, err
 		}
 		roomIDs = append(roomIDs, roomID)
@@ -237,6 +276,10 @@ func (db RoomQueryEngine) GetJoinedRooms(userID uuid.UUID) ([]Room, error) {
 		if err == sql.ErrNoRows {
 			return []Room{}, nil
 		}
+		log.WithFields(log.Fields{
+			"err":    err,
+			"userID": userID,
+		}).Errorln("unable to query joined rooms")
 	}
 
 	rooms := []Room{}
@@ -245,7 +288,9 @@ func (db RoomQueryEngine) GetJoinedRooms(userID uuid.UUID) ([]Room, error) {
 		room := Room{}
 		members := pq.StringArray{}
 		if err := rows.Scan(&room.ID, &room.Name, &members); err != nil {
-			log.WithFields(log.Fields{"err": err}).Warnln("unable to scan row")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Warnln("unable to scan row")
 		}
 		room.Members = members
 		rooms = append(rooms, room)

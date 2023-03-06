@@ -116,10 +116,16 @@ func (hub *Hub) SendMessage(ctx context.Context, ID uuid.UUID, msg []byte) error
 	select {
 	case <-ack:
 		// Success
-		log.WithFields(log.Fields{"cid": cid, "id": ID}).Infoln("received ack")
+		log.WithFields(log.Fields{
+			"cid": cid,
+			"id":  ID,
+		}).Infoln("received ack")
 		return nil
 	case <-timedCtx.Done():
-		log.WithFields(log.Fields{"cid": cid, "err": ctx.Err()}).
+		log.WithFields(log.Fields{
+			"cid": cid,
+			"err": ctx.Err(),
+		}).
 			Warnln("error waiting for client to acknowledge message")
 		return timedCtx.Err()
 	}

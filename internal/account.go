@@ -24,9 +24,11 @@ func (db AccountQueryEngine) CreateAccount(username, email, pass string) (*Accou
 	id := uuid.New()
 	stmt := `INSERT INTO "accounts" ("id", "username", "email", "hashed_pass") VALUES ($1, $2, $3, $4);`
 	if _, err := db.Exec(stmt, id, username, email, pass); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Errorln("unable to insert account into database")
+		log.WithFields(log.Fields{
+			"err":      err,
+			"username": username,
+			"email":    email,
+		}).Errorln("unable to insert account into database")
 		return nil, err
 	}
 
@@ -49,9 +51,9 @@ func (db AccountQueryEngine) GetAccountByUsername(username string) (*Account, er
 
 		if err := row.Scan(&id, &username, &email, &hashedPass); err != nil {
 			if err != sql.ErrNoRows {
-				log.
-					WithFields(log.Fields{"err": err}).
-					Errorln("unable to scan account row")
+				log.WithFields(log.Fields{
+					"err": err,
+				}).Errorln("unable to scan account row")
 				return nil, err
 			} else {
 				return nil, NoMatchingUserError
@@ -60,9 +62,10 @@ func (db AccountQueryEngine) GetAccountByUsername(username string) (*Account, er
 
 		parsedID, err := uuid.Parse(id)
 		if err != nil {
-			log.
-				WithFields(log.Fields{"err": err}).
-				Errorln("unable to parse uuid")
+			log.WithFields(log.Fields{
+				"err": err,
+				"id":  id,
+			}).Errorln("unable to parse uuid")
 			return nil, err
 		}
 
@@ -83,9 +86,9 @@ func (db AccountQueryEngine) VerifyPassword(username, password string) (bool, er
 
 		if err := row.Scan(&hashedPass); err != nil {
 			if err != sql.ErrNoRows {
-				log.
-					WithFields(log.Fields{"err": err}).
-					Errorln("unable to scan account row")
+				log.WithFields(log.Fields{
+					"err": err,
+				}).Errorln("unable to scan account row")
 				return false, err
 			} else {
 				return false, NoMatchingUserError

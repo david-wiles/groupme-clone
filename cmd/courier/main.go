@@ -75,18 +75,21 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.WithFields(log.Fields{"err": err}).Warnln("upgrade error")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Warnln("upgrade error")
 			return
 		}
 
 		// Require JWT within 30 seconds of opening websocket
 		if err := awaitJWT(r.Context(), conn, 30*time.Second); err != nil {
-			w.WriteHeader(403)
 			return
 		}
 
 		ws := hub.RegisterConnection(conn)
-		log.WithFields(log.Fields{"id": ws.ID}).Infoln("registering new websocket")
+		log.WithFields(log.Fields{
+			"id": ws.ID,
+		}).Infoln("registering new websocket")
 	})
 
 	log.Infoln("listening on 8080")

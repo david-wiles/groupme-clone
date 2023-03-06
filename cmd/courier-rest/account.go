@@ -3,23 +3,34 @@ package main
 import (
 	"encoding/json"
 	"github.com/david-wiles/groupme-clone/internal"
-	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
+type CreateAccountRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type AccountResponse struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
 func HandleCreateAccount(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	defer r.Body.Close()
 
 	decoder := json.NewDecoder(r.Body)
 
-	req := &pkg.CreateAccountRequest{}
+	req := &CreateAccountRequest{}
 	if err := decoder.Decode(req); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("cannot decode request")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("cannot decode request")
 		w.WriteHeader(400)
 		return
 	}
@@ -38,37 +49,36 @@ func HandleCreateAccount(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 
 	token, err := internal.GenerateJWT(account, jwtSecret)
 	if err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("unable to generate JWT")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("unable to generate JWT")
 		w.WriteHeader(500)
 		return
 	}
 
-	resp := &pkg.LoginResponse{token, account.ID.String()}
+	internal.SerializeResponse(w, &LoginResponse{token, account.ID.String()})
+}
 
-	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(resp); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("unable to write response")
-		w.WriteHeader(500)
-	}
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
 
-	w.WriteHeader(201)
+type LoginResponse struct {
+	Token string `json:"token"`
+	ID    string `json:"id"`
 }
 
 func HandleLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
 	defer r.Body.Close()
 
 	decoder := json.NewDecoder(r.Body)
-	req := &pkg.LoginRequest{}
+	req := &LoginRequest{}
 
 	if err := decoder.Decode(req); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("cannot decode request")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("cannot decode request")
 		w.WriteHeader(400)
 		return
 	}
@@ -92,22 +102,15 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	token, err := internal.GenerateJWT(account, jwtSecret)
 	if err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("unable to generate JWT")
+		log.WithFields(log.Fields{
+			"err":       err,
+			"accountID": account.ID,
+		}).Warnln("unable to generate JWT")
 		w.WriteHeader(500)
 		return
 	}
 
-	resp := &pkg.LoginResponse{token, account.ID.String()}
-
-	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(resp); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("unable to write response")
-		w.WriteHeader(500)
-	}
+	internal.SerializeResponse(w, &LoginResponse{token, account.ID.String()})
 }
 
 func HandleGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -123,19 +126,13 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 		return
 	}
 
-	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(account); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Warnln("unable to write response")
-		w.WriteHeader(500)
-	}
+	internal.SerializeResponse(w, account)
 }
 
-func AddAccountRoutes(router *httprouter.Router) {
-	router.POST("/account", HandleCreateAccount)
-	router.POST("/account/login", HandleLogin)
+func AddAccountRoutes(prefix string, router *httprouter.Router) {
+	router.POST(prefix+"/account", HandleCreateAccount)
+	router.POST(prefix+"/account/login", HandleLogin)
 	//router.GET("/account/", HandleGetSelf)
 	//router.PATCH("/account/me", HandleAccountUpdate)
-	router.GET("/account/:username", JWTGuard(HandleGetUser))
+	router.GET(prefix+"/account/:username", JWTGuard(HandleGetUser))
 }

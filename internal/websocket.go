@@ -59,11 +59,16 @@ func (ws *WebsocketConnection) readWorker() {
 
 		msg := &pkg.ClientAck{}
 		if err := ws.Deserialize(bytes, msg); err != nil {
-			log.WithFields(log.Fields{"id": ws.ID, "err": err}).Warnln("unable to decode client message")
+			log.WithFields(log.Fields{
+				"id":  ws.ID,
+				"err": err,
+			}).Warnln("unable to decode client message")
 		}
 
 		if err := ws.hub.Acknowledge(msg.Cid); err != nil {
-			log.WithFields(log.Fields{"err": err}).Warnln("failed to acknowledge message")
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Warnln("failed to acknowledge message")
 		}
 	}
 }
@@ -73,19 +78,29 @@ func (ws *WebsocketConnection) writeWorker() {
 	for msg := range ws.Writes {
 		t, b, err := ws.Serialize(msg)
 		if err != nil {
-			log.WithFields(log.Fields{"err": err, "id": ws.ID}).Warnln("unable to serialize message er")
+			log.WithFields(log.Fields{
+				"err": err,
+				"id":  ws.ID,
+			}).Warnln("unable to serialize message er")
 			continue
 		}
 
 		if err := ws.conn.WriteMessage(t, b); err != nil {
-			log.WithFields(log.Fields{"err": err, "id": ws.ID}).Warnln("error writing message")
+			log.WithFields(log.Fields{
+				"err": err,
+				"id":  ws.ID,
+			}).Warnln("error writing message")
 		}
 	}
 }
 
 // unregister removes itself from the hub and closes the underlying connection
 func (ws *WebsocketConnection) unregister() {
-	log.WithFields(log.Fields{"id": ws.ID}).Infoln("removing websocket")
+	log.WithFields(log.Fields{
+		"id": ws.ID,
+	}).Infoln("removing websocket")
+
+	// TODO.. we should clean up the redis connection entries here
 
 	// Remove the connection from the hub first to prevent other goroutines from writing to
 	// the websocket while resources are being cleaned up

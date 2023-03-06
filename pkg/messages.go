@@ -21,13 +21,6 @@ type ClientMessage struct {
 	Serializable `json:"serializable,omitempty"`
 }
 
-type MessagePayload struct {
-	RoomID    string `json:"roomId"`
-	UserID    string `json:"userId"`
-	Timestamp string `json:"timestamp"`
-	Content   string `json:"content"`
-}
-
 type WhoAmIResponse struct {
 	Webhook      string `json:"webhook"`
 	Serializable `json:"serializable,omitempty"`

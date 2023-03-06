@@ -19,6 +19,9 @@ var (
 	messageQueryEngine internal.MessageQueryEngine
 	rdb                *redis.Client
 	jwtSecret          []byte
+	courierConns       *internal.CourierConns
+
+	isDev = false
 )
 
 func init() {
@@ -57,6 +60,47 @@ func init() {
 	rdb = redis.NewClient(&redis.Options{
 		Addr: redisAddr,
 	})
+
+	courierConns = internal.NewCourierConnCache(rdb)
+
+	// Set if local development
+	if _, ok := os.LookupEnv("DEV"); ok {
+		isDev = true
+	}
+}
+
+func devHandler(next http.Handler) http.Handler {
+	if isDev {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			if r.Method != http.MethodOptions {
+				next.ServeHTTP(w, r)
+			}
+		})
+	} else {
+		return next
+	}
+}
+
+func loggingHandler(router *httprouter.Router) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		loggedWriter := &LoggedResponseWriter{200, w}
+
+		start := time.Now().Nanosecond()
+		router.ServeHTTP(loggedWriter, r)
+		end := time.Now().Nanosecond()
+
+		log.WithFields(log.Fields{
+			"status":         loggedWriter.statusCode,
+			"user-agent":     r.Header.Get("User-Agent"),
+			"path":           r.URL.Path,
+			"host":           r.Header.Get("Host"),
+			"method":         r.Method,
+			"responseTimeMs": (end - start) / 1000000.0,
+		}).Infoln()
+	}
 }
 
 type LoggedResponseWriter struct {
@@ -74,37 +118,14 @@ func (w *LoggedResponseWriter) WriteHeader(statusCode int) {
 func main() {
 	router := httprouter.New()
 
-	AddAccountRoutes(router)
-	AddRoomRoutes(router)
-	AddWebsocketRoutes(router)
-	AddMessageRoutes(router)
+	apiVersion := internal.MustGetEnv("API_VERSION")
 
-	if err := http.ListenAndServe(":9000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		loggedWriter := &LoggedResponseWriter{200, w}
+	AddAccountRoutes("/api/"+apiVersion, router)
+	AddRoomRoutes("/api/"+apiVersion, router)
+	AddWebsocketRoutes("/api/"+apiVersion, router)
+	AddMessageRoutes("/api/"+apiVersion, router)
 
-		// Do not commit.. just for testing
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		start := time.Now().Nanosecond()
-
-		// Also just for testing
-		if r.Method != http.MethodOptions {
-			router.ServeHTTP(loggedWriter, r)
-		}
-
-		end := time.Now().Nanosecond()
-
-		log.
-			WithFields(log.Fields{
-				"status":         loggedWriter.statusCode,
-				"user-agent":     r.Header.Get("User-Agent"),
-				"path":           r.URL.Path,
-				"host":           r.Header.Get("Host"),
-				"method":         r.Method,
-				"responseTimeMs": (end - start) / 1000000.0,
-			}).Infoln()
-	})); err != nil {
+	if err := http.ListenAndServe(":9000", devHandler(loggingHandler(router))); err != nil {
 		panic(err)
 	}
 }

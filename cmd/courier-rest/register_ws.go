@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/david-wiles/groupme-clone/internal"
-	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
@@ -33,13 +32,19 @@ func MapUserToClient(ctx context.Context, clientURL string, userID uuid.UUID) er
 	return nil
 }
 
+type ClientRegisterRequest struct {
+	ClientURL string `json:"clientUrl"`
+}
+
 func HandleSelfRegister(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	defer r.Body.Close()
 
-	req := &pkg.ClientRegisterRequest{}
+	req := &ClientRegisterRequest{}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(req); err != nil {
-		log.WithFields(log.Fields{"err": err}).Warnln("unable to decode request body")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("unable to decode request body")
 		w.WriteHeader(400)
 		return
 	}
@@ -73,20 +78,27 @@ func HandleSelfRegister(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	// Add the user to list of clients for each room in Redis
 	for _, roomID := range roomIDs {
 		if err := AddClientToRoom(r.Context(), req.ClientURL, roomID); err != nil {
-			log.
-				WithFields(log.Fields{"err": err, "roomID": roomID}).
-				Errorln("unable to add client to redis")
+			log.WithFields(log.Fields{
+				"err":    err,
+				"roomID": roomID,
+			}).Errorln("unable to add client to redis")
 		}
 	}
+}
+
+type ClientUnRegisterRequest struct {
+	ClientURL string `json:"clientUrl"`
 }
 
 func HandleSelfUnregister(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	defer r.Body.Close()
 
-	req := &pkg.ClientUnRegisterRequest{}
+	req := &ClientUnRegisterRequest{}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(req); err != nil {
-		log.WithFields(log.Fields{"err": err}).Warnln("unable to decode request body")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("unable to decode request body")
 		w.WriteHeader(400)
 		return
 	}
@@ -114,14 +126,15 @@ func HandleSelfUnregister(w http.ResponseWriter, r *http.Request, _ httprouter.P
 	// Remove the user from list of connected clients for each room
 	for _, roomID := range roomIDs {
 		if err := RemoveClientFromRoom(r.Context(), req.ClientURL, roomID); err != nil {
-			log.
-				WithFields(log.Fields{"err": err, "roomID": roomID}).
-				Errorln("unable to remove client from redis")
+			log.WithFields(log.Fields{
+				"err":    err,
+				"roomID": roomID,
+			}).Errorln("unable to remove client from redis")
 		}
 	}
 }
 
-func AddWebsocketRoutes(router *httprouter.Router) {
-	router.POST("/client/register", JWTGuard(HandleSelfRegister))
-	router.POST("/client/unregister", JWTGuard(HandleSelfUnregister))
+func AddWebsocketRoutes(prefix string, router *httprouter.Router) {
+	router.POST(prefix+"/client/register", JWTGuard(HandleSelfRegister))
+	router.POST(prefix+"/client/unregister", JWTGuard(HandleSelfUnregister))
 }

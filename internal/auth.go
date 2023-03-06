@@ -12,9 +12,9 @@ import (
 func HashPassword(pass string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(pass), 0)
 	if err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Errorln("unable to hash password")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable to hash password")
 		return "", err
 	}
 	return string(hash), nil

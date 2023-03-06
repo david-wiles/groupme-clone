@@ -1,34 +1,30 @@
 package internal
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
-	"github.com/david-wiles/groupme-clone/pkg"
+	"encoding/json"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
 
 type Message struct {
-	roomID    uuid.UUID
-	userID    uuid.UUID
-	timestamp time.Time
-	content   string
+	RoomID    uuid.UUID `json:"roomId,omitempty"`
+	UserID    uuid.UUID `json:"userId,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Content   string    `json:"content,omitempty"`
 }
 
-type Messages []Message
-
-func (messages Messages) ToResponse() *pkg.MessageGetResponse {
-	resp := &pkg.MessageGetResponse{
-		Messages: []pkg.MessageGetResponseMessage{},
+func (message *Message) Encode() ([]byte, error) {
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(message); err != nil {
+		return nil, err
 	}
-	for _, message := range messages {
-		resp.Messages = append(resp.Messages, pkg.MessageGetResponseMessage{
-			UserID:    message.userID.String(),
-			Content:   message.content,
-			Timestamp: message.timestamp.Format(time.RFC3339Nano),
-		})
-	}
-	return resp
+	return buf.Bytes(), nil
 }
 
 type MessageQueryEngine struct {
@@ -39,9 +35,9 @@ func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, ts time.
 	id := uuid.New()
 	stmt := `INSERT INTO "messages" ("id", "room", "content", "ts", "account_id") VALUES ($1, $2, $3, $4, $5);`
 	if _, err := db.Exec(stmt, id, roomID, message, ts, userID); err != nil {
-		log.
-			WithFields(log.Fields{"err": err}).
-			Errorln("unable to insert message into database")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorln("unable to insert message into database")
 		return err
 	}
 
@@ -52,7 +48,12 @@ func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time)
 	stmt := `SELECT "room", "content", "account_id", "ts" FROM "messages" WHERE "room" = $1 AND "ts" > $2 AND "ts" < $3 ORDER BY ts DESC;`
 	rows, err := db.Query(stmt, roomID, from, to)
 	if err != nil {
-		log.WithFields(log.Fields{"err": err, "room": roomID, "from": from, "to": to}).Errorln("unable to query messages")
+		log.WithFields(log.Fields{
+			"err":  err,
+			"room": roomID,
+			"from": from,
+			"to":   to,
+		}).Errorln("unable to query messages")
 		return nil, err
 	}
 
@@ -61,11 +62,41 @@ func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time)
 	defer rows.Close()
 	for rows.Next() {
 		message := Message{}
-		if err := rows.Scan(&message.roomID, &message.content, &message.userID, &message.timestamp); err != nil {
-			log.WithFields(log.Fields{"err": err}).Warnln("unable to scan row")
+		if err := rows.Scan(&message.RoomID, &message.Content, &message.UserID, &message.Timestamp); err != nil {
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Warnln("unable to scan row")
 		}
 		messages = append(messages, message)
 	}
 
 	return messages, nil
+}
+
+func (message *Message) SendToClients(ctx context.Context, room *Room, conns *CourierConns) ([]byte, error) {
+	encoded, err := message.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	// Special case for rooms with only 2 members, i.e. a DM
+	if len(room.Members) == 2 {
+		for _, recipient := range room.Members {
+			if recipient != message.UserID.String() {
+				recipientID, err := uuid.Parse(recipient)
+				if err != nil {
+					return encoded, err
+				}
+				if err := conns.UnicastMessage(ctx, recipientID, encoded); err != nil {
+					return encoded, err
+				}
+			}
+		}
+	} else {
+		if err := conns.BroadcastMessage(ctx, message.RoomID, encoded); err != nil {
+			return encoded, err
+		}
+	}
+
+	return encoded, nil
 }

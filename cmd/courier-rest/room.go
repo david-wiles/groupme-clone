@@ -3,20 +3,29 @@ package main
 import (
 	"encoding/json"
 	"github.com/david-wiles/groupme-clone/internal"
-	"github.com/david-wiles/groupme-clone/pkg"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
+type CreateRoomRequest struct {
+	Name string `json:"name"`
+	IsDm bool   `json:"isDm"`
+
+	// Recipient is only used for requests to create a direct message room
+	Recipient string `json:"recipient,omitempty"`
+}
+
 func HandleCreateRoom(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	defer r.Body.Close()
 
-	req := &pkg.CreateRoomRequest{}
+	req := &CreateRoomRequest{}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(req); err != nil {
-		log.WithFields(log.Fields{"err": err}).Warnln("unable to decode request body")
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Warnln("unable to decode request body")
 		w.WriteHeader(400)
 		return
 	}
@@ -54,18 +63,7 @@ func HandleCreateRoom(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		}
 	}
 
-	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(room); err != nil {
-		log.
-			WithFields(log.Fields{
-				"room": room,
-				"err":  err,
-			}).
-			Errorln("unable to encode room data")
-		w.WriteHeader(500)
-	}
-
-	w.WriteHeader(201)
+	internal.SerializeResponse(w, room)
 }
 
 func HandleGetRoom(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -120,13 +118,23 @@ func HandleJoinRoom(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 	}
 
 	if err := roomQueryEngine.JoinRoom(parsedRoomID, parsedUserID); err != nil {
-		if err == internal.AlreadyJoinedError {
-			w.WriteHeader(200)
-		} else {
+		if err != internal.AlreadyJoinedError {
 			w.WriteHeader(500)
+			return
 		}
+	}
+
+	room, err := roomQueryEngine.GetRoomByID(parsedRoomID)
+	if err != nil {
+		w.WriteHeader(500)
 		return
 	}
+
+	internal.SerializeResponse(w, room)
+}
+
+type ListRoomsResponse struct {
+	Rooms []internal.Room `json:"rooms"`
 }
 
 func HandleListRooms(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -149,17 +157,16 @@ func HandleListRooms(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		return
 	}
 
-	resp := internal.Rooms(rooms).ToResponse()
 	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(resp); err != nil {
+	if err := encoder.Encode(&ListRoomsResponse{rooms}); err != nil {
 		w.WriteHeader(500)
 	}
 }
 
-func AddRoomRoutes(router *httprouter.Router) {
-	router.POST("/room", JWTGuard(HandleCreateRoom))
+func AddRoomRoutes(prefix string, router *httprouter.Router) {
+	router.POST(prefix+"/room", JWTGuard(HandleCreateRoom))
 	//router.PATCH("/room/:id", HandleUpdateRoom)
-	router.GET("/room/:id", JWTGuard(HandleGetRoom))
-	router.POST("/room/:id/join", JWTGuard(HandleJoinRoom))
-	router.GET("/room", JWTGuard(HandleListRooms))
+	router.GET(prefix+"/room/:id", JWTGuard(HandleGetRoom))
+	router.POST(prefix+"/room/:id/join", JWTGuard(HandleJoinRoom))
+	router.GET(prefix+"/room", JWTGuard(HandleListRooms))
 }
