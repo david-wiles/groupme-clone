@@ -11,6 +11,7 @@ import (
 )
 
 type Message struct {
+	ID        uuid.UUID `json:"id,omitempty"`
 	RoomID    uuid.UUID `json:"roomId,omitempty"`
 	UserID    uuid.UUID `json:"userId,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
@@ -45,7 +46,7 @@ func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, ts time.
 }
 
 func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time) ([]Message, error) {
-	stmt := `SELECT "room", "content", "account_id", "ts" FROM "messages" WHERE "room" = $1 AND "ts" > $2 AND "ts" < $3 ORDER BY ts DESC;`
+	stmt := `SELECT "id", "room", "content", "account_id", "ts" FROM "messages" WHERE "room" = $1 AND "ts" > $2 AND "ts" < $3 ORDER BY ts DESC;`
 	rows, err := db.Query(stmt, roomID, from, to)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -62,7 +63,7 @@ func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time)
 	defer rows.Close()
 	for rows.Next() {
 		message := Message{}
-		if err := rows.Scan(&message.RoomID, &message.Content, &message.UserID, &message.Timestamp); err != nil {
+		if err := rows.Scan(&message.ID, &message.RoomID, &message.Content, &message.UserID, &message.Timestamp); err != nil {
 			log.WithFields(log.Fields{
 				"err": err,
 			}).Warnln("unable to scan row")

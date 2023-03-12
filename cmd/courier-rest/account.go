@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/david-wiles/groupme-clone/internal"
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -13,12 +14,6 @@ type CreateAccountRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
-}
-
-type AccountResponse struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
 }
 
 func HandleCreateAccount(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -114,9 +109,15 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 }
 
 func HandleGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	username := p.ByName("username")
+	id := p.ByName("id")
 
-	account, err := accountQueryEngine.GetAccountByUsername(username)
+	parsedId, err := uuid.Parse(id)
+	if err != nil {
+		w.WriteHeader(400)
+		return
+	}
+
+	account, err := accountQueryEngine.GetAccount(parsedId)
 	if err != nil {
 		if err == internal.NoMatchingUserError {
 			w.WriteHeader(404)
@@ -134,5 +135,5 @@ func AddAccountRoutes(prefix string, router *httprouter.Router) {
 	router.POST(prefix+"/account/login", HandleLogin)
 	//router.GET("/account/", HandleGetSelf)
 	//router.PATCH("/account/me", HandleAccountUpdate)
-	router.GET(prefix+"/account/:username", JWTGuard(HandleGetUser))
+	router.GET(prefix+"/account/:id", JWTGuard(HandleGetUser))
 }
