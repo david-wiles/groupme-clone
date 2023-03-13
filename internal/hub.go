@@ -17,6 +17,8 @@ type Hub struct {
 	connMu sync.RWMutex
 	conns  map[uuid.UUID]*WebsocketConnection
 
+	RegistrationEngine
+
 	// Map of CIDs to its channels used by a SendMessage call. When a client sends a message
 	// with a CID matching one of these CIDs, the goroutine awaiting the acknowledgment will
 	// be notified, ending that SendMessage call
@@ -28,34 +30,70 @@ type Hub struct {
 	pkg.Serializer
 }
 
-func NewHub(hostname string) *Hub {
+func NewHub(hostname string, engine RegistrationEngine) *Hub {
 	return &Hub{
-		connMu:      sync.RWMutex{},
-		conns:       make(map[uuid.UUID]*WebsocketConnection),
-		cidMu:       sync.RWMutex{},
-		inFlightCID: make(map[uuid.UUID]chan struct{}),
-		hostname:    hostname,
-		Serializer:  pkg.JSONSerializer{},
+		connMu:             sync.RWMutex{},
+		conns:              make(map[uuid.UUID]*WebsocketConnection),
+		cidMu:              sync.RWMutex{},
+		inFlightCID:        make(map[uuid.UUID]chan struct{}),
+		hostname:           hostname,
+		Serializer:         pkg.JSONSerializer{},
+		RegistrationEngine: engine,
 	}
 }
 
 // RegisterConnection will create a new WebsocketConnection from an underlying websocket.Conn
 // and add it to the map of managed connections
-func (hub *Hub) RegisterConnection(conn *websocket.Conn) *WebsocketConnection {
-	ws := NewWebsocketConnection(conn, hub)
+func (hub *Hub) RegisterConnection(userID uuid.UUID, conn *websocket.Conn) *WebsocketConnection {
+	ws := NewWebsocketConnection(conn, hub, userID)
 
 	hub.connMu.Lock()
-	defer hub.connMu.Unlock()
 	hub.conns[ws.ID] = ws
+	hub.connMu.Unlock()
+
+	webhook := hub.hostname + "/" + ws.ID.String()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Register the client's webhook
+	if err := hub.SetUserWebhook(ctx, webhook, userID); err != nil {
+		log.WithFields(log.Fields{
+			"err":    err,
+			"userID": userID,
+			"wsID":   ws.ID,
+		}).Errorln("unable to set client webhook")
+	}
 
 	return ws
 }
 
 // UnregisterConnection removes the WebsocketConnection identified by ID from the managed connections
-func (hub *Hub) UnregisterConnection(ID uuid.UUID) {
+func (hub *Hub) UnregisterConnection(wsID uuid.UUID) {
+	var userID *uuid.UUID
+
 	hub.connMu.Lock()
-	defer hub.connMu.Unlock()
-	delete(hub.conns, ID)
+	ws, ok := hub.conns[wsID]
+	if ok {
+		userID = &ws.userID
+	}
+
+	delete(hub.conns, wsID)
+	hub.connMu.Unlock()
+
+	if userID != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Register the client's webhook
+		if err := hub.RemoveUserWebhook(ctx, *userID); err != nil {
+			log.WithFields(log.Fields{
+				"err":    err,
+				"userID": userID,
+				"wsID":   ws.ID,
+			}).Errorln("unable to set client webhook")
+		}
+	}
 }
 
 // UnsafeSendMessage attempts to send the message msg to the connection identified by ID. It will not

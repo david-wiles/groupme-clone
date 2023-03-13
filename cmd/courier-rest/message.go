@@ -47,7 +47,7 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 		return
 	}
 
-	room, err := roomQueryEngine.GetRoomByID(roomID)
+	members, err := roomQueryEngine.ListRoomMembers(roomID)
 	if err != nil {
 		if err == internal.NoMatchingRoomError {
 			w.WriteHeader(400)
@@ -64,23 +64,21 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	}
 
 	// Create possibly encrypted message payload
-	payload := &internal.Message{
+	encoded, err := (&internal.Message{
 		RoomID:    roomID,
 		UserID:    userID,
 		Timestamp: now,
 		Content:   req.Message,
-	}
-
-	encoded, err := payload.SendToClients(r.Context(), room, courierConns)
+	}).Encode()
 	if err != nil {
 		log.WithFields(log.Fields{
-			"err":    err,
-			"roomID": roomID,
-			"userID": userID,
-		}).Warnln("could not send message to connected clients")
-		w.WriteHeader(201)
+			"err": err,
+		})
+		w.WriteHeader(500)
+		return
 	}
 
+	courierConns.BroadcastMessage(r.Context(), members, encoded)
 	_, _ = w.Write(encoded)
 }
 

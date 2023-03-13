@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/david-wiles/groupme-clone/internal"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"net"
@@ -24,6 +26,8 @@ var (
 	// The address that the websocket server will be listening on
 	websocketListenAddress string
 
+	registrationEngine internal.RegistrationEngine
+
 	jwtSecret []byte
 )
 
@@ -39,6 +43,15 @@ func init() {
 	grpcListenAddress = internal.MustGetEnv("GRPC_LISTEN_ADDRESS")
 	websocketListenAddress = internal.MustGetEnv("WEBSOCKET_LISTEN_ADDRESS")
 	jwtSecret = []byte(internal.MustGetEnv("JWT_SECRET"))
+
+	// Initiate Redis connection
+	redisAddr := internal.MustGetEnv("REDIS_ADDR")
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+
+	registrationEngine = internal.RegistrationEngine{rdb}
 }
 
 func main() {
@@ -52,7 +65,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	hub := internal.NewHub(hostname)
+	hub := internal.NewHub(hostname, registrationEngine)
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
@@ -82,11 +95,21 @@ func main() {
 		}
 
 		// Require JWT within 30 seconds of opening websocket
-		if err := awaitJWT(r.Context(), conn, 30*time.Second); err != nil {
+		claims, err := awaitJWT(r.Context(), conn, 30*time.Second)
+		if err != nil {
 			return
 		}
 
-		ws := hub.RegisterConnection(conn)
+		id, err := uuid.Parse(claims.ID)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"err": err,
+				"id":  claims.ID,
+			}).Warnln("unable to parse UUID from claims")
+			return
+		}
+
+		ws := hub.RegisterConnection(id, conn)
 		log.WithFields(log.Fields{
 			"id": ws.ID,
 		}).Infoln("registering new websocket")
@@ -100,30 +123,35 @@ func main() {
 	grpcServer.GracefulStop()
 }
 
-func awaitJWT(ctx context.Context, conn *websocket.Conn, timeout time.Duration) error {
+func awaitJWT(ctx context.Context, conn *websocket.Conn, timeout time.Duration) (c internal.ClaimData, err error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
-	authorized := make(chan bool)
+	authorized := make(chan *internal.ClaimData)
 
 	defer cancel()
 
 	go func() {
 		if _, bytes, err := conn.ReadMessage(); err == nil {
-			if _, err := internal.VerifyJWT(string(bytes), jwtSecret); err == nil {
-				authorized <- true
+			if token, err := internal.VerifyJWT(string(bytes), jwtSecret); err == nil {
+				claims, ok := internal.GetClaimsFromToken(token)
+				if ok {
+					authorized <- &claims
+				} else {
+					authorized <- nil
+				}
 			}
 		}
-		authorized <- false
+		authorized <- nil
 		close(authorized)
 	}()
 
 	select {
 	case <-ctxWithTimeout.Done():
-		return ctxWithTimeout.Err()
-	case isAuthorized := <-authorized:
-		if isAuthorized {
-			return nil
+		return c, ctxWithTimeout.Err()
+	case claims := <-authorized:
+		if claims != nil {
+			return *claims, nil
 		} else {
-			return errors.New("unable to authorize websocket")
+			return c, errors.New("unable to authorize websocket")
 		}
 	}
 }

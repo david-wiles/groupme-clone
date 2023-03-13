@@ -19,6 +19,9 @@ type WebsocketConnection struct {
 	// ID is a UUID identifying the websocket
 	ID uuid.UUID
 
+	// userID corresponds to the user listening to this websocket
+	userID uuid.UUID
+
 	// conn is the underlying websocket connection.
 	conn *websocket.Conn
 
@@ -27,18 +30,14 @@ type WebsocketConnection struct {
 }
 
 // NewWebsocketConnection will create a new websocket and generate a UUID
-func NewWebsocketConnection(conn *websocket.Conn, hub *Hub) *WebsocketConnection {
+func NewWebsocketConnection(conn *websocket.Conn, hub *Hub, userID uuid.UUID) *WebsocketConnection {
 	ws := &WebsocketConnection{
 		Writes:     make(chan pkg.Serializable, 64),
 		Serializer: hub.Serializer,
 		ID:         uuid.New(),
+		userID:     userID,
 		conn:       conn,
 		hub:        hub,
-	}
-
-	// Send the client their webhook as soon as the connection has been established
-	ws.Writes <- pkg.WhoAmIResponse{
-		Webhook: hub.hostname + "/" + ws.ID.String(),
 	}
 
 	go ws.readWorker()
@@ -99,8 +98,6 @@ func (ws *WebsocketConnection) unregister() {
 	log.WithFields(log.Fields{
 		"id": ws.ID,
 	}).Infoln("removing websocket")
-
-	// TODO.. we should clean up the redis connection entries here
 
 	// Remove the connection from the hub first to prevent other goroutines from writing to
 	// the websocket while resources are being cleaned up

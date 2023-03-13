@@ -50,7 +50,7 @@ func ParseJWT(auth string, key interface{}) (*jwt.Token, error) {
 	return jwt.Parse(auth, func(token *jwt.Token) (interface{}, error) { return key, nil })
 }
 
-func GetAndVerifyJWT(jwtSecret interface{}, r *http.Request) (*http.Request, error) {
+func VerifyJWTFromRequest(jwtSecret interface{}, r *http.Request) (*http.Request, error) {
 	header := r.Header.Get("Authorization")
 	var auth string
 
@@ -82,4 +82,28 @@ func VerifyJWT(auth string, key interface{}) (*jwt.Token, error) {
 	}
 
 	return token, nil
+}
+
+func GetClaimsFromToken(token *jwt.Token) (claimData ClaimData, ok bool) {
+	claims := token.Claims.(jwt.MapClaims)
+
+	allOk := true
+
+	if id, ok := claims["id"].(string); ok {
+		claimData.ID = id
+	} else {
+		allOk = false
+	}
+	if username, ok := claims["username"].(string); ok {
+		claimData.Username = username
+	} else {
+		allOk = false
+	}
+	if email, ok := claims["email"].(string); ok {
+		claimData.Email = email
+	} else {
+		allOk = false
+	}
+
+	return claimData, allOk
 }

@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"github.com/google/uuid"
@@ -72,32 +71,4 @@ func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time)
 	}
 
 	return messages, nil
-}
-
-func (message *Message) SendToClients(ctx context.Context, room *Room, conns *CourierConns) ([]byte, error) {
-	encoded, err := message.Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	// Special case for rooms with only 2 members, i.e. a DM
-	if len(room.Members) == 2 {
-		for _, recipient := range room.Members {
-			if recipient != message.UserID.String() {
-				recipientID, err := uuid.Parse(recipient)
-				if err != nil {
-					return encoded, err
-				}
-				if err := conns.UnicastMessage(ctx, recipientID, encoded); err != nil {
-					return encoded, err
-				}
-			}
-		}
-	} else {
-		if err := conns.BroadcastMessage(ctx, message.RoomID, encoded); err != nil {
-			return encoded, err
-		}
-	}
-
-	return encoded, nil
 }

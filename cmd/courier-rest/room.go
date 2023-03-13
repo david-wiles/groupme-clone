@@ -133,6 +133,30 @@ func HandleJoinRoom(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 	internal.SerializeResponse(w, room)
 }
 
+type ListMembersResponse struct {
+	Members []uuid.UUID `json:"members,omitempty"`
+}
+
+func HandleListRoomMembers(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	id := p.ByName("id")
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		w.WriteHeader(400)
+		return
+	}
+
+	members, err := roomQueryEngine.ListRoomMembers(parsedID)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(&ListMembersResponse{members}); err != nil {
+		w.WriteHeader(500)
+	}
+}
+
 type ListRoomsResponse struct {
 	Rooms []internal.Room `json:"rooms"`
 }
@@ -168,5 +192,6 @@ func AddRoomRoutes(prefix string, router *httprouter.Router) {
 	//router.PATCH("/room/:id", HandleUpdateRoom)
 	router.GET(prefix+"/room/:id", JWTGuard(HandleGetRoom))
 	router.POST(prefix+"/room/:id/join", JWTGuard(HandleJoinRoom))
+	router.GET(prefix+"/room/:id/members", JWTGuard(HandleListRoomMembers))
 	router.GET(prefix+"/room", JWTGuard(HandleListRooms))
 }

@@ -21,11 +21,6 @@ type ClientMessage struct {
 	Serializable `json:"serializable,omitempty"`
 }
 
-type WhoAmIResponse struct {
-	Webhook      string `json:"webhook"`
-	Serializable `json:"serializable,omitempty"`
-}
-
 type Serializer interface {
 	Serialize(Serializable) (int, []byte, error)
 	Deserialize([]byte, Serializable) error

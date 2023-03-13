@@ -11,7 +11,7 @@ import (
 // This will return 403 without calling `next` if the JWT is invalid.
 func JWTGuard(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		req, err := internal.GetAndVerifyJWT(jwtSecret, r)
+		req, err := internal.VerifyJWTFromRequest(jwtSecret, r)
 		if err != nil {
 			w.WriteHeader(403)
 			return
@@ -26,27 +26,7 @@ func GetClaimsFromRequest(r *http.Request) (claimData internal.ClaimData, ok boo
 	val := r.Context().Value("jwt")
 
 	if token, ok := val.(*jwt.Token); ok {
-		claims := token.Claims.(jwt.MapClaims)
-
-		allOk := true
-
-		if id, ok := claims["id"].(string); ok {
-			claimData.ID = id
-		} else {
-			allOk = false
-		}
-		if username, ok := claims["username"].(string); ok {
-			claimData.Username = username
-		} else {
-			allOk = false
-		}
-		if email, ok := claims["email"].(string); ok {
-			claimData.Email = email
-		} else {
-			allOk = false
-		}
-
-		return claimData, allOk
+		return internal.GetClaimsFromToken(token)
 	}
 
 	return

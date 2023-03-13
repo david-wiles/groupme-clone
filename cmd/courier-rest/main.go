@@ -122,7 +122,6 @@ func main() {
 
 	AddAccountRoutes("/api/"+apiVersion, router)
 	AddRoomRoutes("/api/"+apiVersion, router)
-	AddWebsocketRoutes("/api/"+apiVersion, router)
 	AddMessageRoutes("/api/"+apiVersion, router)
 
 	if err := http.ListenAndServe(":9000", devHandler(loggingHandler(router))); err != nil {

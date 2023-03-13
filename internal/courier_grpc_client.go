@@ -63,24 +63,15 @@ func (conns *CourierConns) SendMessageTo(ctx context.Context, webhook string, me
 	return true, nil
 }
 
-func (conns *CourierConns) BroadcastMessage(ctx context.Context, roomID uuid.UUID, message []byte) error {
-	clients, err := conns.rdb.SMembers(ctx, roomID.String()).Result()
-	if err != nil {
-		return err
-	}
-
-	for _, client := range clients {
-		if ok, _ := conns.SendMessageTo(ctx, client, message); !ok {
-			if _, err := conns.rdb.SRem(ctx, roomID.String(), client).Result(); err != nil {
-				log.WithFields(log.Fields{
-					"err":    err,
-					"client": client,
-				}).Warnln("unable to remove client ID from cache")
-			}
+func (conns *CourierConns) BroadcastMessage(ctx context.Context, users []uuid.UUID, message []byte) {
+	for _, user := range users {
+		if err := conns.UnicastMessage(ctx, user, message); err != nil {
+			log.WithFields(log.Fields{
+				"err":    err,
+				"userID": user,
+			}).Errorln("unable to send to user")
 		}
 	}
-
-	return nil
 }
 
 func (conns *CourierConns) UnicastMessage(ctx context.Context, userID uuid.UUID, message []byte) error {
