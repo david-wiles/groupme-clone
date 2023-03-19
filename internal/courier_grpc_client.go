@@ -11,14 +11,14 @@ import (
 )
 
 type CourierConns struct {
-	cache map[string]CourierClient
-	rdb   *redis.Client
+	cache  map[string]CourierClient
+	client RegistrationEngine
 }
 
 func NewCourierConnCache(rdb *redis.Client) *CourierConns {
 	return &CourierConns{
-		cache: make(map[string]CourierClient),
-		rdb:   rdb,
+		cache:  make(map[string]CourierClient),
+		client: RegistrationEngine{rdb},
 	}
 }
 
@@ -63,31 +63,36 @@ func (conns *CourierConns) SendMessageTo(ctx context.Context, webhook string, me
 	return true, nil
 }
 
-func (conns *CourierConns) BroadcastMessage(ctx context.Context, users []uuid.UUID, message []byte) {
-	for _, user := range users {
-		if err := conns.UnicastMessage(ctx, user, message); err != nil {
-			log.WithFields(log.Fields{
-				"err":    err,
-				"userID": user,
-			}).Errorln("unable to send to user")
-		}
+func (conns *CourierConns) BroadcastMessage(ctx context.Context, users []uuid.UUID, message []byte) error {
+	webhooks, err := conns.client.ListUsersWebhook(ctx, users)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err":   err,
+			"users": users,
+		}).Errorln("unable to list webhooks")
+		return err
 	}
+
+	for _, webhook := range webhooks {
+		_, _ = conns.SendMessageTo(ctx, webhook, message)
+	}
+	return nil
 }
 
 func (conns *CourierConns) UnicastMessage(ctx context.Context, userID uuid.UUID, message []byte) error {
-	client, err := conns.rdb.Get(ctx, userID.String()).Result()
+	webhook, err := conns.client.GetUserWebhook(ctx, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":    err,
-			"client": client,
+			"userID": userID,
 		}).Errorln("unable to get client webhook")
 		return err
 	}
 
-	ok, err := conns.SendMessageTo(ctx, client, message)
+	ok, err := conns.SendMessageTo(ctx, webhook, message)
 	if err != nil {
 		if !ok {
-			_ = conns.rdb.Del(ctx, userID.String())
+			_ = conns.client.RemoveUserWebhook(ctx, userID)
 		}
 
 		return err

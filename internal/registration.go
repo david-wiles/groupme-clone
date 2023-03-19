@@ -26,6 +26,27 @@ func (rdb RegistrationEngine) GetUserWebhook(ctx context.Context, userID uuid.UU
 	return w, nil
 }
 
+func (rdb RegistrationEngine) ListUsersWebhook(ctx context.Context, users []uuid.UUID) ([]string, error) {
+	var usersList []string
+	for _, user := range users {
+		usersList = append(usersList, user.String())
+	}
+
+	list, err := rdb.MGet(ctx, usersList...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var webhooks []string
+	for _, v := range list {
+		if webhook, ok := v.(string); ok {
+			webhooks = append(webhooks, webhook)
+		}
+	}
+
+	return webhooks, nil
+}
+
 func (rdb RegistrationEngine) RemoveUserWebhook(ctx context.Context, userID uuid.UUID) error {
 	if _, err := rdb.Del(ctx, userID.String(), userID.String()).Result(); err != nil {
 		return err

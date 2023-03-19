@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"strings"
 )
 
 type CreateAccountRequest struct {
@@ -52,6 +53,35 @@ func HandleCreateAccount(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 	}
 
 	internal.SerializeResponse(w, &LoginResponse{token, account.ID.String()})
+}
+
+type ListAccountResponse struct {
+	Users []*internal.Account `json:"users"`
+}
+
+func HandleAccountList(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	usersRaw := r.URL.Query().Get("users")
+
+	listRaw := strings.Split(usersRaw, ",")
+
+	var users []uuid.UUID
+	for _, raw := range listRaw {
+		u, err := uuid.Parse(raw)
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		users = append(users, u)
+	}
+
+	var accounts []*internal.Account
+	for _, userID := range users {
+		if account, err := accountQueryEngine.GetAccount(userID); err == nil {
+			accounts = append(accounts, account)
+		}
+	}
+
+	internal.SerializeResponse(w, &ListAccountResponse{accounts})
 }
 
 type LoginRequest struct {
@@ -132,6 +162,7 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 
 func AddAccountRoutes(prefix string, router *httprouter.Router) {
 	router.POST(prefix+"/account", HandleCreateAccount)
+	router.GET(prefix+"/account", JWTGuard(HandleAccountList))
 	router.POST(prefix+"/account/login", HandleLogin)
 	//router.GET("/account/", HandleGetSelf)
 	//router.PATCH("/account/me", HandleAccountUpdate)
