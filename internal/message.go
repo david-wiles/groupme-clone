@@ -31,17 +31,17 @@ type MessageQueryEngine struct {
 	*sql.DB
 }
 
-func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, ts time.Time, message string) error {
-	id := uuid.New()
+func (db MessageQueryEngine) CreateNewMessage(roomID, userID uuid.UUID, ts time.Time, message string) (id uuid.UUID, err error) {
+	id = uuid.New()
 	stmt := `INSERT INTO "messages" ("id", "room", "content", "ts", "account_id") VALUES ($1, $2, $3, $4, $5);`
 	if _, err := db.Exec(stmt, id, roomID, message, ts, userID); err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Errorln("unable to insert message into database")
-		return err
+		return id, err
 	}
 
-	return nil
+	return id, nil
 }
 
 func (db MessageQueryEngine) QueryMessages(roomID uuid.UUID, from, to time.Time) ([]Message, error) {

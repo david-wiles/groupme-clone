@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
@@ -23,4 +24,14 @@ func SerializeResponse(w http.ResponseWriter, r any) {
 		}).Errorln("unable to serialize response")
 		w.WriteHeader(500)
 	}
+}
+
+func FilterUUID(list []uuid.UUID, toRemove uuid.UUID) []uuid.UUID {
+	for i := 0; i < len(list); i++ {
+		if list[i] == toRemove {
+			list[i] = list[len(list)-1]
+			return list[:len(list)-1]
+		}
+	}
+	return list
 }

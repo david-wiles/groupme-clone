@@ -58,13 +58,15 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	}
 
 	now := time.Now()
-	if err := messageQueryEngine.CreateNewMessage(roomID, userID, now, req.Message); err != nil {
+	id, err := messageQueryEngine.CreateNewMessage(roomID, userID, now, req.Message)
+	if err != nil {
 		w.WriteHeader(500)
 		return
 	}
 
 	// Create possibly encrypted message payload
 	encoded, err := (&internal.Message{
+		ID:        id,
 		RoomID:    roomID,
 		UserID:    userID,
 		Timestamp: now,
@@ -78,7 +80,13 @@ func HandleMessagePost(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 		return
 	}
 
-	courierConns.BroadcastMessage(r.Context(), members, encoded)
+	if err := courierConns.BroadcastMessage(r.Context(), internal.FilterUUID(members, userID), encoded); err != nil {
+		log.WithFields(log.Fields{
+			"err":       err,
+			"messageID": id,
+			"userID":    userID,
+		}).Warnln("unable to broadcast message")
+	}
 	_, _ = w.Write(encoded)
 }
 
